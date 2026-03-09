@@ -3,6 +3,8 @@ package com.driver.earnings.service
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.content.SharedPreferences
+import android.content.Intent
+import android.content.Context
 import androidx.preference.PreferenceManager
 import android.util.Log
 import java.util.regex.Pattern
@@ -15,6 +17,7 @@ class UberNotificationService : NotificationListenerService() {
     override fun onCreate() {
         super.onCreate()
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
+        Log.d(TAG, "Service de notificação criado")
     }
     
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -36,33 +39,71 @@ class UberNotificationService : NotificationListenerService() {
             
             if (amount != null && distance != null) {
                 saveEarningData(amount, distance)
+                // CORREÇÃO 1: Dispara intent para iniciar/atualizar o OverlayService
+                startOverlayService()
+            } else {
+                Log.d(TAG, "Não foi possível extrair valor ou distância da notificação")
             }
         }
     }
     
     private fun extractAmount(text: String): Double? {
-        // Regex para encontrar padrões como R$ 15,50 ou R$15,50
+        // Regex para encontrar padrões como R$ 15,50 ou R$15,50 ou R$ 15.50
         val amountPattern = Pattern.compile("R\\$\\s*(\\d+[.,]\\d{2})")
         val matcher = amountPattern.matcher(text)
         
         return if (matcher.find()) {
             val amountStr = matcher.group(1).replace(",", ".")
-            amountStr.toDoubleOrNull()
+            try {
+                amountStr.toDouble()
+            } catch (e: NumberFormatException) {
+                Log.e(TAG, "Erro ao converter valor: $amountStr")
+                null
+            }
         } else {
-            null
+            // Tenta outro padrão: apenas números com símbolo R$
+            val alternativePattern = Pattern.compile("(\\d+[.,]\\d{2})")
+            val altMatcher = alternativePattern.matcher(text)
+            if (altMatcher.find()) {
+                val amountStr = altMatcher.group(1).replace(",", ".")
+                try {
+                    amountStr.toDouble()
+                } catch (e: NumberFormatException) {
+                    null
+                }
+            } else {
+                null
+            }
         }
     }
     
     private fun extractDistance(text: String): Double? {
-        // Regex para encontrar padrões como 8.4 km, 8,4 km, 8.4km
+        // Regex para encontrar padrões como 8.4 km, 8,4 km, 8.4km, 8,4km
         val distancePattern = Pattern.compile("(\\d+[.,]\\d+)\\s*km", Pattern.CASE_INSENSITIVE)
         val matcher = distancePattern.matcher(text)
         
         return if (matcher.find()) {
             val distanceStr = matcher.group(1).replace(",", ".")
-            distanceStr.toDoubleOrNull()
+            try {
+                distanceStr.toDouble()
+            } catch (e: NumberFormatException) {
+                Log.e(TAG, "Erro ao converter distância: $distanceStr")
+                null
+            }
         } else {
-            null
+            // Tenta encontrar números que parecem distância (ex: 8.4 sozinho)
+            val alternativePattern = Pattern.compile("(\\d+[.,]\\d+)")
+            val altMatcher = alternativePattern.matcher(text)
+            if (altMatcher.find()) {
+                val distanceStr = altMatcher.group(1).replace(",", ".")
+                try {
+                    distanceStr.toDouble()
+                } catch (e: NumberFormatException) {
+                    null
+                }
+            } else {
+                null
+            }
         }
     }
     
@@ -75,8 +116,29 @@ class UberNotificationService : NotificationListenerService() {
         Log.d(TAG, "Dados salvos - Valor: R$ $amount, Distância: $distance km")
     }
     
+    // CORREÇÃO 1: Método para iniciar o OverlayService
+    private fun startOverlayService() {
+        try {
+            val intent = Intent(this, OverlayService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            Log.d(TAG, "OverlayService iniciado/atualizado")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao iniciar OverlayService: ${e.message}")
+        }
+    }
+    
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         // Opcional: lidar com notificações removidas
+        Log.d(TAG, "Notificação removida: ${sbn.packageName}")
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d(TAG, "Service de notificação destruído")
     }
     
     companion object {
@@ -86,6 +148,14 @@ class UberNotificationService : NotificationListenerService() {
             editor.putFloat("car_consumption", consumption)
             editor.putFloat("fuel_price", fuelPrice)
             editor.apply()
+            Log.d("UberNotification", "Configurações do carro salvas - Consumo: $consumption km/L, Preço: R$ $fuelPrice")
+        }
+        
+        fun getCarSettings(context: Context): Pair<Float, Float> {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val consumption = prefs.getFloat("car_consumption", 10f)
+            val fuelPrice = prefs.getFloat("fuel_price", 5.50f)
+            return Pair(consumption, fuelPrice)
         }
     }
 }
