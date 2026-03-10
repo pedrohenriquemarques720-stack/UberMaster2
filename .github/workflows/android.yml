@@ -18,9 +18,11 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # Este passo baixa o Gradle e cria o arquivo .jar que está faltando
-    - name: Setup Gradle Wrapper
-      run: gradle wrapper --gradle-version 8.2
+    # Esta etapa força o uso da versão estável 8.2
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: 8.2
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
