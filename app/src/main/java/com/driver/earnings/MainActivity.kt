@@ -7,12 +7,15 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import androidx.preference.PreferenceManager
 import com.driver.earnings.service.UberNotificationService
 import com.driver.earnings.service.OverlayService
 
@@ -36,6 +39,10 @@ class MainActivity : AppCompatActivity() {
         
         initViews()
         setupListeners()
+    }
+
+    override fun onResume() {
+        super.onResume()
         updatePermissionStatus()
     }
     
@@ -68,13 +75,19 @@ class MainActivity : AppCompatActivity() {
     
     private fun updatePermissionStatus() {
         // Status da permissão de overlay
-        if (Settings.canDrawOverlays(this)) {
+        val canDrawOverlays = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(this)
+        } else {
+            true
+        }
+
+        if (canDrawOverlays) {
             tvOverlayStatus.text = "✓ Concedida"
-            tvOverlayStatus.setTextColor(getColor(android.R.color.holo_green_dark))
+            tvOverlayStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
             btnOverlayPermission.isEnabled = false
         } else {
             tvOverlayStatus.text = "✗ Negada"
-            tvOverlayStatus.setTextColor(getColor(android.R.color.holo_red_dark))
+            tvOverlayStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark))
             btnOverlayPermission.isEnabled = true
         }
         
@@ -84,17 +97,16 @@ class MainActivity : AppCompatActivity() {
         
         if (notificationPermission) {
             tvNotificationStatus.text = "✓ Concedida"
-            tvNotificationStatus.setTextColor(getColor(android.R.color.holo_green_dark))
+            tvNotificationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
             btnNotificationPermission.isEnabled = false
         } else {
             tvNotificationStatus.text = "✗ Negada"
-            tvNotificationStatus.setTextColor(getColor(android.R.color.holo_red_dark))
+            tvNotificationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark))
             btnNotificationPermission.isEnabled = true
         }
         
         // Habilita botão de iniciar serviço apenas se ambas permissões estiverem concedidas
-        btnStartService.isEnabled = Settings.canDrawOverlays(this) && 
-                                    notificationPermission
+        btnStartService.isEnabled = canDrawOverlays && notificationPermission
     }
     
     private fun requestOverlayPermission() {
@@ -110,17 +122,23 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun requestNotificationPermission() {
-        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-        startActivity(intent)
-        Toast.makeText(
-            this,
-            "Ative o acesso às notificações para o Driver Earnings",
-            Toast.LENGTH_LONG
-        ).show()
+        try {
+            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+            startActivity(intent)
+            Toast.makeText(
+                this,
+                "Ative o acesso às notificações para o Driver Earnings",
+                Toast.LENGTH_LONG
+            ).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Não foi possível abrir as configurações", Toast.LENGTH_SHORT).show()
+        }
     }
     
     private fun startOverlayService() {
-        if (Settings.canDrawOverlays(this)) {
+        val canDraw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true
+        
+        if (canDraw) {
             val intent = Intent(this, OverlayService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(intent)
@@ -128,7 +146,7 @@ class MainActivity : AppCompatActivity() {
                 startService(intent)
             }
             Toast.makeText(this, "Widget flutuante ativado!", Toast.LENGTH_SHORT).show()
-            finish() // Fecha a MainActivity
+            finish() 
         } else {
             Toast.makeText(this, "Permissão de overlay necessária", Toast.LENGTH_SHORT).show()
         }
@@ -139,7 +157,7 @@ class MainActivity : AppCompatActivity() {
         val etConsumption = dialogView.findViewById<EditText>(R.id.et_consumption)
         val etFuelPrice = dialogView.findViewById<EditText>(R.id.et_fuel_price)
         
-        // Carrega valores atuais
+        // Carrega valores atuais usando PreferenceManager
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         etConsumption.setText(prefs.getFloat("car_consumption", 10f).toString())
         etFuelPrice.setText(prefs.getFloat("fuel_price", 5.50f).toString())
@@ -151,7 +169,13 @@ class MainActivity : AppCompatActivity() {
                 val consumption = etConsumption.text.toString().toFloatOrNull() ?: 10f
                 val fuelPrice = etFuelPrice.text.toString().toFloatOrNull() ?: 5.50f
                 
-                UberNotificationService.saveCarSettings(this, consumption, fuelPrice)
+                // Salva nas preferências
+                prefs.edit().apply {
+                    putFloat("car_consumption", consumption)
+                    putFloat("fuel_price", fuelPrice)
+                    apply()
+                }
+                
                 Toast.makeText(this, "Configurações salvas!", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Cancelar", null)
