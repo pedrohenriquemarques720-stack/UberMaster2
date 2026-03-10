@@ -9,7 +9,9 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
+import androidx.preference.PreferenceManager
 import com.driver.earnings.R
+import java.util.regex.Pattern
 
 class OverlayService : Service() {
 
@@ -20,7 +22,6 @@ class OverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         floatingView = LayoutInflater.from(this).inflate(R.layout.layout_floating_widget, null)
 
@@ -35,24 +36,50 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         )
 
-        params.gravity = Gravity.TOP or Gravity.START
-        params.x = 100
+        params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
         params.y = 100
-
         windowManager.addView(floatingView, params)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val title = intent?.getStringExtra("uber_title")
-        val text = intent?.getStringExtra("uber_text")
-
-        // Se houver dados da Uber, você faria o cálculo aqui e atualizaria a tela
-        if (title != null) {
-            val tvStatus = floatingView.findViewById<TextView>(R.id.tv_widget_status)
-            tvStatus.text = "Nova Viagem detectada!"
+        val text = intent?.getStringExtra("uber_text") ?: ""
+        
+        if (text.isNotEmpty()) {
+            calculateAndDisplay(text)
         }
-
         return START_STICKY
+    }
+
+    private fun calculateAndDisplay(rawText: String) {
+        val tvStatus = floatingView.findViewById<TextView>(R.id.tv_widget_status)
+        
+        // RegEx para extrair valores (R$ e KM) do texto da Uber
+        val price = extractValue(rawText, "R\\$\\s?(\\d+[,.]\\d+)")
+        val distance = extractValue(rawText, "(\\d+[,.]\\d+)\\s?km")
+
+        if (price != null && distance != null) {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+            val consumption = prefs.getFloat("car_consumption", 10f)
+            val fuelPrice = prefs.getFloat("fuel_price", 5.50f)
+
+            // A FÓRMULA: Lucro = Preço - ((Distância / Consumo) * Preço Combustível)
+            val cost = (distance / consumption) * fuelPrice
+            val profit = price - cost
+
+            val color = if (profit > 5) "#4CAF50" else "#F44336" // Verde se lucro > 5, senão Vermelho
+            tvStatus.text = String.format("Lucro: R$ %.2f\nCusto: R$ %.2f", profit, cost)
+            tvStatus.setTextColor(android.graphics.Color.parseColor(color))
+        } else {
+            tvStatus.text = "Aguardando dados..."
+        }
+    }
+
+    private fun extractValue(text: String, patternStr: String): Float? {
+        val pattern = Pattern.compile(patternStr, Pattern.CASE_INSENSITIVE)
+        val matcher = pattern.matcher(text)
+        return if (matcher.find()) {
+            matcher.group(1)?.replace(",", ".")?.toFloatOrNull()
+        } else null
     }
 
     override fun onDestroy() {
