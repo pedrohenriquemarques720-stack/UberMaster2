@@ -2,6 +2,7 @@ package com.driver.earnings.service
 
 import android.app.Service
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.IBinder
 import android.view.Gravity
@@ -36,8 +37,10 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         )
 
+        // Posiciona no topo, centralizado horizontalmente
         params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-        params.y = 100
+        params.y = 100 // Distância do topo da tela
+
         windowManager.addView(floatingView, params)
     }
 
@@ -51,7 +54,8 @@ class OverlayService : Service() {
     }
 
     private fun calculateAndDisplay(rawText: String) {
-        val tvStatus = floatingView.findViewById<TextView>(R.id.tv_widget_status)
+        val tvProfit = floatingView.findViewById<TextView>(R.id.tv_widget_profit)
+        val tvCost = floatingView.findViewById<TextView>(R.id.tv_widget_cost)
         
         // RegEx para extrair valores (R$ e KM) do texto da Uber
         val price = extractValue(rawText, "R\\$\\s?(\\d+[,.]\\d+)")
@@ -66,11 +70,22 @@ class OverlayService : Service() {
             val cost = (distance / consumption) * fuelPrice
             val profit = price - cost
 
-            val color = if (profit > 5) "#4CAF50" else "#F44336" // Verde se lucro > 5, senão Vermelho
-            tvStatus.text = String.format("Lucro: R$ %.2f\nCusto: R$ %.2f", profit, cost)
-            tvStatus.setTextColor(android.graphics.Color.parseColor(color))
+            // Feedback Visual no Lucro
+            if (profit > 10) {
+                tvProfit.setTextColor(Color.parseColor("#4CAF50")) // Verde Boa
+            } else if (profit > 5) {
+                tvProfit.setTextColor(Color.parseColor("#FFC107")) // Amarelo Alerta
+            } else {
+                tvProfit.setTextColor(Color.parseColor("#F44336")) // Vermelho Ruim
+            }
+
+            tvProfit.text = String.format("R$ %.2f", profit)
+            tvCost.text = String.format("Custo: R$ %.2f", cost)
         } else {
-            tvStatus.text = "Aguardando dados..."
+            // Se falhar a extração, mostra erro visualmente
+            tvProfit.text = "Erro Dados"
+            tvProfit.setTextColor(Color.LTGRAY)
+            tvCost.text = "Aguardando Uber..."
         }
     }
 
