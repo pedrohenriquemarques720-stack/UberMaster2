@@ -27,6 +27,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvOverlayStatus: TextView
     private lateinit var tvNotificationStatus: TextView
     
+    // Novas variáveis do histórico
+    private lateinit var tvDailyProfit: TextView
+    private lateinit var tvDailyTrips: TextView
+    private lateinit var btnResetHistory: Button
+    
     private val overlayPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
@@ -44,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updatePermissionStatus()
+        updateDashboard() // Atualiza os valores sempre que o ecrã for aberto
     }
     
     private fun initViews() {
@@ -53,33 +59,45 @@ class MainActivity : AppCompatActivity() {
         tvOverlayStatus = findViewById(R.id.tv_overlay_status)
         tvNotificationStatus = findViewById(R.id.tv_notification_status)
         
-        // Botão para configurar consumo do carro (abre o Dialog)
+        tvDailyProfit = findViewById(R.id.tv_daily_profit)
+        tvDailyTrips = findViewById(R.id.tv_daily_trips)
+        btnResetHistory = findViewById(R.id.btn_reset_history)
+        
         findViewById<Button>(R.id.btn_settings).setOnClickListener {
             showSettingsDialog()
         }
     }
     
     private fun setupListeners() {
-        btnOverlayPermission.setOnClickListener {
-            requestOverlayPermission()
-        }
+        btnOverlayPermission.setOnClickListener { requestOverlayPermission() }
+        btnNotificationPermission.setOnClickListener { requestNotificationPermission() }
+        btnStartService.setOnClickListener { startAppServices() }
         
-        btnNotificationPermission.setOnClickListener {
-            requestNotificationPermission()
-        }
-        
-        btnStartService.setOnClickListener {
-            startAppServices()
+        btnResetHistory.setOnClickListener {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+            prefs.edit().apply {
+                putFloat("daily_total_profit", 0f)
+                putInt("daily_total_trips", 0)
+                apply()
+            }
+            updateDashboard()
+            Toast.makeText(this, "Histórico limpo com sucesso!", Toast.LENGTH_SHORT).show()
         }
     }
     
+    private fun updateDashboard() {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val profit = prefs.getFloat("daily_total_profit", 0f)
+        val trips = prefs.getInt("daily_total_trips", 0)
+        
+        tvDailyProfit.text = String.format("R$ %.2f", profit)
+        tvDailyTrips.text = "$trips viagens registadas"
+    }
+    
     private fun updatePermissionStatus() {
-        // Status da permissão de overlay (Desenhar sobre outros apps)
         val canDrawOverlays = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Settings.canDrawOverlays(this)
-        } else {
-            true
-        }
+        } else true
 
         if (canDrawOverlays) {
             tvOverlayStatus.text = "✓ Concedida"
@@ -91,7 +109,6 @@ class MainActivity : AppCompatActivity() {
             btnOverlayPermission.isEnabled = true
         }
         
-        // Status da permissão de acesso às notificações
         val notificationPermission = NotificationManagerCompat.getEnabledListenerPackages(this)
             .contains(packageName)
         
@@ -105,17 +122,13 @@ class MainActivity : AppCompatActivity() {
             btnNotificationPermission.isEnabled = true
         }
         
-        // Habilita botão de iniciar serviço apenas se ambas permissões estiverem OK
         btnStartService.isEnabled = canDrawOverlays && notificationPermission
     }
     
     private fun requestOverlayPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
+                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
                 overlayPermissionLauncher.launch(intent)
             }
         }
@@ -123,39 +136,26 @@ class MainActivity : AppCompatActivity() {
     
     private fun requestNotificationPermission() {
         try {
-            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-            startActivity(intent)
-            Toast.makeText(
-                this,
-                "Ative o acesso às notificações para o Driver Earnings",
-                Toast.LENGTH_LONG
-            ).show()
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            Toast.makeText(this, "Ative o acesso às notificações para o Driver Earnings", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             Toast.makeText(this, "Não foi possível abrir as configurações", Toast.LENGTH_SHORT).show()
         }
     }
     
     private fun startAppServices() {
-        // 1. Inicia o Widget Flutuante (Overlay)
         val overlayIntent = Intent(this, OverlayService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(overlayIntent)
         } else {
             startService(overlayIntent)
         }
-
-        // 2. Inicia o Monitor de Notificações
-        val notificationIntent = Intent(this, UberNotificationService::class.java)
-        startService(notificationIntent)
-
+        startService(Intent(this, UberNotificationService::class.java))
         Toast.makeText(this, "Serviços Driver Earnings ativos!", Toast.LENGTH_SHORT).show()
-        
-        // Minimiza o app para o motorista já ver a Uber ou a tela inicial
         moveTaskToBack(true)
     }
     
     private fun showSettingsDialog() {
-        // Infla o layout do dialog (certifique-se que o arquivo dialog_settings.xml existe)
         val dialogView = layoutInflater.inflate(R.layout.dialog_settings, null)
         val etConsumption = dialogView.findViewById<EditText>(R.id.et_consumption)
         val etFuelPrice = dialogView.findViewById<EditText>(R.id.et_fuel_price)
@@ -170,7 +170,6 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Salvar") { _, _ ->
                 val consumption = etConsumption.text.toString().toFloatOrNull() ?: 10f
                 val fuelPrice = etFuelPrice.text.toString().toFloatOrNull() ?: 5.50f
-                
                 prefs.edit().apply {
                     putFloat("car_consumption", consumption)
                     putFloat("fuel_price", fuelPrice)
