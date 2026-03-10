@@ -53,7 +53,7 @@ class MainActivity : AppCompatActivity() {
         tvOverlayStatus = findViewById(R.id.tv_overlay_status)
         tvNotificationStatus = findViewById(R.id.tv_notification_status)
         
-        // Botão para configurar consumo do carro
+        // Botão para configurar consumo do carro (abre o Dialog)
         findViewById<Button>(R.id.btn_settings).setOnClickListener {
             showSettingsDialog()
         }
@@ -69,12 +69,12 @@ class MainActivity : AppCompatActivity() {
         }
         
         btnStartService.setOnClickListener {
-            startOverlayService()
+            startAppServices()
         }
     }
     
     private fun updatePermissionStatus() {
-        // Status da permissão de overlay
+        // Status da permissão de overlay (Desenhar sobre outros apps)
         val canDrawOverlays = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Settings.canDrawOverlays(this)
         } else {
@@ -91,7 +91,7 @@ class MainActivity : AppCompatActivity() {
             btnOverlayPermission.isEnabled = true
         }
         
-        // Status da permissão de notificação
+        // Status da permissão de acesso às notificações
         val notificationPermission = NotificationManagerCompat.getEnabledListenerPackages(this)
             .contains(packageName)
         
@@ -105,7 +105,7 @@ class MainActivity : AppCompatActivity() {
             btnNotificationPermission.isEnabled = true
         }
         
-        // Habilita botão de iniciar serviço apenas se ambas permissões estiverem concedidas
+        // Habilita botão de iniciar serviço apenas se ambas permissões estiverem OK
         btnStartService.isEnabled = canDrawOverlays && notificationPermission
     }
     
@@ -135,29 +135,31 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    private fun startOverlayService() {
-        val canDraw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true
-        
-        if (canDraw) {
-            val intent = Intent(this, OverlayService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
-            Toast.makeText(this, "Widget flutuante ativado!", Toast.LENGTH_SHORT).show()
-            finish() 
+    private fun startAppServices() {
+        // 1. Inicia o Widget Flutuante (Overlay)
+        val overlayIntent = Intent(this, OverlayService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(overlayIntent)
         } else {
-            Toast.makeText(this, "Permissão de overlay necessária", Toast.LENGTH_SHORT).show()
+            startService(overlayIntent)
         }
+
+        // 2. Inicia o Monitor de Notificações
+        val notificationIntent = Intent(this, UberNotificationService::class.java)
+        startService(notificationIntent)
+
+        Toast.makeText(this, "Serviços Driver Earnings ativos!", Toast.LENGTH_SHORT).show()
+        
+        // Minimiza o app para o motorista já ver a Uber ou a tela inicial
+        moveTaskToBack(true)
     }
     
     private fun showSettingsDialog() {
+        // Infla o layout do dialog (certifique-se que o arquivo dialog_settings.xml existe)
         val dialogView = layoutInflater.inflate(R.layout.dialog_settings, null)
         val etConsumption = dialogView.findViewById<EditText>(R.id.et_consumption)
         val etFuelPrice = dialogView.findViewById<EditText>(R.id.et_fuel_price)
         
-        // Carrega valores atuais usando PreferenceManager
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         etConsumption.setText(prefs.getFloat("car_consumption", 10f).toString())
         etFuelPrice.setText(prefs.getFloat("fuel_price", 5.50f).toString())
@@ -169,13 +171,11 @@ class MainActivity : AppCompatActivity() {
                 val consumption = etConsumption.text.toString().toFloatOrNull() ?: 10f
                 val fuelPrice = etFuelPrice.text.toString().toFloatOrNull() ?: 5.50f
                 
-                // Salva nas preferências
                 prefs.edit().apply {
                     putFloat("car_consumption", consumption)
                     putFloat("fuel_price", fuelPrice)
                     apply()
                 }
-                
                 Toast.makeText(this, "Configurações salvas!", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Cancelar", null)
