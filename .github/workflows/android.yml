@@ -18,7 +18,7 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    # Esta etapa força o uso da versão estável 8.2
+    # Esta etapa força o uso da versão estável 8.2 e ignora a 9.3.1
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
