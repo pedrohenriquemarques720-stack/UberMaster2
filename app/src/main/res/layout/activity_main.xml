@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.github.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
@@ -16,7 +17,6 @@
         android:gravity="center"
         android:layout_marginBottom="32dp" />
 
-    <!-- Card de Configurações -->
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -51,7 +51,6 @@
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <!-- Card de Permissões -->
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -75,7 +74,6 @@
                 android:textStyle="bold"
                 android:layout_marginBottom="16dp" />
 
-            <!-- Overlay Permission -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -106,7 +104,6 @@
                     android:textSize="12sp" />
             </LinearLayout>
 
-            <!-- Notification Permission -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -139,7 +136,6 @@
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <!-- Botão Iniciar -->
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
