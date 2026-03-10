@@ -37,16 +37,18 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         )
 
-        // Posiciona no topo, centralizado horizontalmente
         params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-        params.y = 100 // Distância do topo da tela
-
+        params.y = 100 
         windowManager.addView(floatingView, params)
+
+        // Lógica do botão Fechar
+        floatingView.findViewById<TextView>(R.id.btn_close_widget).setOnClickListener {
+            stopSelf() // Encerra o widget
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val text = intent?.getStringExtra("uber_text") ?: ""
-        
         if (text.isNotEmpty()) {
             calculateAndDisplay(text)
         }
@@ -57,7 +59,6 @@ class OverlayService : Service() {
         val tvProfit = floatingView.findViewById<TextView>(R.id.tv_widget_profit)
         val tvCost = floatingView.findViewById<TextView>(R.id.tv_widget_cost)
         
-        // RegEx para extrair valores (R$ e KM) do texto da Uber
         val price = extractValue(rawText, "R\\$\\s?(\\d+[,.]\\d+)")
         val distance = extractValue(rawText, "(\\d+[,.]\\d+)\\s?km")
 
@@ -66,26 +67,39 @@ class OverlayService : Service() {
             val consumption = prefs.getFloat("car_consumption", 10f)
             val fuelPrice = prefs.getFloat("fuel_price", 5.50f)
 
-            // A FÓRMULA: Lucro = Preço - ((Distância / Consumo) * Preço Combustível)
             val cost = (distance / consumption) * fuelPrice
             val profit = price - cost
 
-            // Feedback Visual no Lucro
             if (profit > 10) {
-                tvProfit.setTextColor(Color.parseColor("#4CAF50")) // Verde Boa
+                tvProfit.setTextColor(Color.parseColor("#4CAF50"))
             } else if (profit > 5) {
-                tvProfit.setTextColor(Color.parseColor("#FFC107")) // Amarelo Alerta
+                tvProfit.setTextColor(Color.parseColor("#FFC107"))
             } else {
-                tvProfit.setTextColor(Color.parseColor("#F44336")) // Vermelho Ruim
+                tvProfit.setTextColor(Color.parseColor("#F44336"))
             }
 
             tvProfit.text = String.format("R$ %.2f", profit)
             tvCost.text = String.format("Custo: R$ %.2f", cost)
+
+            // Guarda o valor no histórico diário
+            saveToDailyHistory(profit)
+
         } else {
-            // Se falhar a extração, mostra erro visualmente
             tvProfit.text = "Erro Dados"
             tvProfit.setTextColor(Color.LTGRAY)
             tvCost.text = "Aguardando Uber..."
+        }
+    }
+
+    private fun saveToDailyHistory(profit: Float) {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val currentTotal = prefs.getFloat("daily_total_profit", 0f)
+        val currentTrips = prefs.getInt("daily_total_trips", 0)
+        
+        prefs.edit().apply {
+            putFloat("daily_total_profit", currentTotal + profit)
+            putInt("daily_total_trips", currentTrips + 1)
+            apply()
         }
     }
 
