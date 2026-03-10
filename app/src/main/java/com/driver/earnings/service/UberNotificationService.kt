@@ -2,90 +2,37 @@ package com.driver.earnings.service
 
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import android.content.SharedPreferences
+import android.content.Context
+import android.content.Intent
 import androidx.preference.PreferenceManager
-import android.util.Log
-import java.util.regex.Pattern
 
 class UberNotificationService : NotificationListenerService() {
-    
-    private lateinit var sharedPreferences: SharedPreferences
-    private val TAG = "UberNotification"
-    
-    override fun onCreate() {
-        super.onCreate()
-        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
-    }
-    
-    override fun onNotificationPosted(sbn: StatusBarNotification) {
-        // Verifica se é notificação da Uber
-        if (sbn.packageName == "com.ubercab.driver") {
-            val notification = sbn.notification
-            val extras = notification.extras
+
+    override fun onNotificationPosted(sbn: StatusBarNotification?) {
+        super.onNotificationPosted(sbn)
+        
+        // Verifica se a notificação é da Uber
+        if (sbn?.packageName == "com.ubercab.driver") {
+            val title = sbn.notification.extras.getString("android.title")
+            val text = sbn.notification.extras.getString("android.text")
             
-            // Extrai o texto da notificação
-            val title = extras.getCharSequence(android.app.Notification.EXTRA_TITLE).toString()
-            val text = extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString()
-            val fullText = "$title $text"
-            
-            Log.d(TAG, "Notificação recebida: $fullText")
-            
-            // Extrai valor e distância usando regex
-            val amount = extractAmount(fullText)
-            val distance = extractDistance(fullText)
-            
-            if (amount != null && distance != null) {
-                saveEarningData(amount, distance)
-            }
+            // Envia os dados para o Widget Flutuante (OverlayService)
+            val intent = Intent(this, OverlayService::class.java)
+            intent.putExtra("uber_title", title)
+            intent.putExtra("uber_text", text)
+            startService(intent)
         }
     }
-    
-    private fun extractAmount(text: String): Double? {
-        // Regex para encontrar padrões como R$ 15,50 ou R$15,50
-        val amountPattern = Pattern.compile("R\\$\\s*(\\d+[.,]\\d{2})")
-        val matcher = amountPattern.matcher(text)
-        
-        return if (matcher.find()) {
-            val amountStr = matcher.group(1).replace(",", ".")
-            amountStr.toDoubleOrNull()
-        } else {
-            null
-        }
-    }
-    
-    private fun extractDistance(text: String): Double? {
-        // Regex para encontrar padrões como 8.4 km, 8,4 km, 8.4km
-        val distancePattern = Pattern.compile("(\\d+[.,]\\d+)\\s*km", Pattern.CASE_INSENSITIVE)
-        val matcher = distancePattern.matcher(text)
-        
-        return if (matcher.find()) {
-            val distanceStr = matcher.group(1).replace(",", ".")
-            distanceStr.toDoubleOrNull()
-        } else {
-            null
-        }
-    }
-    
-    private fun saveEarningData(amount: Double, distance: Double) {
-        val editor = sharedPreferences.edit()
-        editor.putFloat("last_amount", amount.toFloat())
-        editor.putFloat("last_distance", distance.toFloat())
-        editor.apply()
-        
-        Log.d(TAG, "Dados salvos - Valor: R$ $amount, Distância: $distance km")
-    }
-    
-    override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        // Opcional: lidar com notificações removidas
-    }
-    
+
     companion object {
+        // Função para salvar as configurações de consumo que você usa na MainActivity
         fun saveCarSettings(context: Context, consumption: Float, fuelPrice: Float) {
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-            val editor = prefs.edit()
-            editor.putFloat("car_consumption", consumption)
-            editor.putFloat("fuel_price", fuelPrice)
-            editor.apply()
+            prefs.edit().apply {
+                putFloat("car_consumption", consumption)
+                putFloat("fuel_price", fuelPrice)
+                apply()
+            }
         }
     }
 }
